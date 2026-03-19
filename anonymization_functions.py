@@ -80,7 +80,7 @@ def anonymize_texts(texts: list[str],
 
     # If entity metadata is provided, extract gold entities for evaluation
     pred_docs_eval = []
-    if meta_data is not None and any([(SINGLE_TEXT_FIELDS[-1] in meta and meta[SINGLE_TEXT_FIELDS[-1]] is not None) for meta in meta_data]):
+    if meta_data is not None and any([(meta is not None and SINGLE_TEXT_FIELDS[-1] in meta and meta[SINGLE_TEXT_FIELDS[-1]] is not None) for meta in meta_data]):
         gold_docs = []
         for text, meta, pred_doc_eval in zip(texts, meta_data, pred_docs):
             if meta[SINGLE_TEXT_FIELDS[-1]] is not None or meta[SINGLE_TEXT_FIELDS[-2]] is not None:

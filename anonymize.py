@@ -4,14 +4,13 @@ import os
 import warnings
 import argparse
 import sys
-import json
 import spacy
 import spacy_transformers
 
 from anonymization_functions import anonymize_texts
 from config import DEFAULT_NER_MODEL, PERSONAL_DATA_FORMAT, DEFAULT_OUTPUTS_IN_SINGLE_FILE
 from utils import read_json_file
-from utils.anonymization_utils import save_anonymized_text, read_file, save_many_texts, save_metrics
+from utils.anonymization_utils import read_file, save_many_texts, save_metrics
 from GUI.GUI import main as gui_main
 
 import multiprocessing as mp
@@ -24,7 +23,7 @@ warnings.filterwarnings("ignore", message=r".*\[W095\].*")
 # ----------------------------
 #   Anonymization Lambda
 # ----------------------------
-def anonimize(inputs: list[str],
+def anonymize(inputs: list[str],
               output_dir: str = None,
               text: str = None,
               entities: list[str] = None,
@@ -33,12 +32,12 @@ def anonimize(inputs: list[str],
     """
     Anonymizes text using spaCy NER and additional rules, with flexible input and output options.
 
-    :param inputs: list of input file and/or folder paths. Each file can be a .txt, .json, or .docx file. If a folder is provided, all files in the folder will be processed. In case of JSON files, each of these can also contain a dictionary of personal data.
+    :param inputs: list of input file and/or folder paths. Each file can be a .txt, .json, or .pdf file. If a folder is provided, all files in the folder will be processed. In case of JSON files, each of these can also contain a dictionary of personal data.
     :param output_dir: folder path where to save anonymized text. If omitted and input is a file, output will be saved in the same folder as the input file. If omitted and input is raw text, anonymized text will be printed to stdout.
     :param text: raw text to anonymize. If provided, this takes precedence over file inputs.
     :param entities: list of entity types to anonymize. If omitted, default entity types will be used.
     :param per_matching: whether to anonymize PER and PATIENT entities in combination with dictionaries or not. If omitted, the default level of extra matching will be applied.
-    :param personal_data: path to json dictionary of specific personal data to anonymize.
+    :param personal_data: path to json dictionary of specific personal data to anonymize. This should be provided in case of pdf files, where no metadata is available.
     :return: the path to the saved anonymized file directory.
     """
 
@@ -76,8 +75,8 @@ def anonimize(inputs: list[str],
             try:
                 t, m, pd = read_file(filepath)
                 texts.extend(t)
-                metadata.extend(m if m else [None] * len(t))
-                personal_data_list.extend([pd] * len(t))
+                metadata.extend(m if m else [None])
+                personal_data_list.extend([pd]*len(t) if pd else [None]*len(t))
             except Exception as e:
                 print(f"Error reading '{filepath}': {e}", file=sys.stderr)
                 sys.exit(1)
@@ -130,6 +129,7 @@ def anonimize(inputs: list[str],
     elif inputs:
         if len(inputs) == 1:
             out_dir = os.path.dirname(inputs[0]) if os.path.isfile(inputs[0]) else inputs[0]
+            if out_dir == "": out_dir = os.getcwd()
         else:
             print("Multiple input files provided without output_dir. Please specify an output directory.", file=sys.stderr)
             sys.exit(1)
@@ -181,7 +181,7 @@ def main():
     # -----------------------------------
     # CLI MODE
     # -----------------------------------
-    anonimize(inputs=args.inputs,
+    anonymize(inputs=args.inputs,
               output_dir=args.output_dir,
               text=args.text,
               entities=args.entities,

@@ -61,9 +61,30 @@ SEED_SAMPLES = [
         "filename": "diaries_it",
         "description": "diary entry in Italian",
         "n_examples_per_prompt": 5,
-        "n_outputs": {"train": 1475 // 5}
-    }
+        "n_outputs": {"train": 1475 // 5},
+        "train_test_split": 0.85
+    },
+    {
+        "filename": "wikimedia",
+        "description": "paragraphs extracted from Italian Wikipedia articles",
+        "n_examples_per_prompt": 1,
+        "n_outputs": {"train": 11788 // 1},
+        "train_test_split": 0.85
+    },
+    {
+        "filename": "wikinews",
+        "description": "paragraphs extracted from Italian Wikipedia news articles",
+        "n_examples_per_prompt": 1,
+        "n_outputs": {"train": 3000 // 1},
+        "train_test_split": 0.85
+    },
 ]
+
+NAME_TO_INDEX = {sample['filename']: i for i, sample in enumerate(SEED_SAMPLES)}
 
 SEED_PATH_DIARIES = "seed_samples/original_diaries.csv"
 TRAIN_TEST_SPLIT_DIARIES = 0.85  # Proportion of data to use for training vs. testing
+SEED_PATH_WIKIMEDIA = "seed_samples/itwiki.csv"
+TRAIN_TEST_SPLIT_WIKIMEDIA = 0.85  # Proportion of data to use for training vs. testing
+SEED_PATH_WIKINEWS = "seed_samples/itwikinews.csv"
+TRAIN_TEST_SPLIT_WIKINEWS = 0.85  # Proportion of data to use for training vs. testing

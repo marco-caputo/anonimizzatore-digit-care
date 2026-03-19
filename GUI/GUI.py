@@ -24,7 +24,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
 
-from config import DEFAULT_ENTITIES, DEFAULT_EXTRA_PER_MATCHING_LEVEL, DEFAULT_OUTPUTS_IN_SINGLE_FILE,MULTI_PROCESSING, P_CORES
+from config import DEFAULT_ENTITIES, DEFAULT_OUTPUTS_IN_SINGLE_FILE,MULTI_PROCESSING, P_CORES
 from data_generation import ANONYMIZATION_LABELS
 from utils.anonymization_utils import read_file, save_many_texts, save_metrics
 

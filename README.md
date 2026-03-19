@@ -1,368 +1,322 @@
-# Manuale di utilizzo degli script
+# Substance Abuse Italian Anonymizer
 
-## Indice
+A fine-tuned tool for de-identifying italian documents and diaries from substance abuse therapy facilities. 
+This has been developed as part of the Digit-Care project, aimed at creating predictive models to support therapeutic pathways for pathological addictions and assisting 4 Italian substance abuse therapy centers in decision making.
 
-- [split.py](#splitpy)
-  - [Formato di Input](#formato-di-input-split)
-  - [Formato di Output](#formato-di-output-split)
-  - [Utilizzo](#utilizzo-split)
-- [merge.py](#mergepy)
-  - [Formato di Input](#formato-di-input-merge)
-  - [Formato di Output](#formato-di-output-merge)
-  - [Utilizzo](#utilizzo-merge)
-  - [Logica di Fusione](#logica-di-fusione)
-- [anonymize.py](#anonymizepy)
-  - [Formato di Input](#formato-di-input-anonymize)
-  - [Formato di Output](#formato-di-output-anonymize)
-  - [Utilizzo](#utilizzo-anonymize)
-- [Configurazioni](#configurazioni)
-- [Lista delle Entità Riconosciute](#lista-delle-entità-riconosciute)
 
----
+This tool anonymizes Italian text using **spaCy NER** plus **custom rule-based detectors**.
+It can run from the **command line** or via a **graphical interface (GUI)**.
 
-## split.py
+## System requirements
 
-Lo script `split.py` serve per leggere uno o più file JSON contenenti diari di equipe e suddividere il relativo contenuto in più file JSON separati, ognuno contenente la porzione di testo relativa ad un singolo paziente.
-
-### Formato di Input {#formato-di-input-split}
-
-Il JSON in input può contenere una sezione `anagrafica` (lista di dizionari) contenente i dati dei pazienti coinvolti e deve contenere una sezione `testi` (lista di dizionari) contenente i testi non strutturati con diversi pazienti.
-
-Esempio:
-
-```json
-{
-  "anagrafica": [
-    {
-      "nome": "CAMILLO",
-      "cognome": "BENSO",
-      "ragSoc": "CAMILLO BENSO CONTE DI CAVOUR",
-      "nazione_nascita": "ITALIA",
-      "luogo_nascita": "TORINO",
-      "data_nascita": "10-07-1810",
-      "nazione_residenza": "ITALIA",
-      "luogo_residenza": "TORINO",
-      "prov_residenza": "TO",
-      "idAna": 123
-    }
-  ],
-  "testi": [
-    {
-      "tipo": "Diario d'equipe",
-      "data": "02-01-2026 17:44",
-      "testo": "BENSO: Testo relativo a Camillo..."
-    }
-  ]
-}
-```
-Nota: non è necessario che tutte le anagrafiche relative ai pazienti che appaiono nei testi siano elencate, né che siano presenti tutti i campi indicati per ogni dizionario anagrafico.
-
----
-
-### Formato di Output {#formato-di-output-split}
-I vari file JSON in output conterranno una sezione `anagrafica` (singolo dizionario) contenente il cognome rilevato dal testo e gli eventuali altri dati del paziente presenti nel file in input, e una sezione `testi` (lista di dizionari) contenente i frammenti relativi al paziente dei testi non strutturati in input.
-
-Rispetta quindi il seguente formato:
-
-```json
-{
-  "anagrafica": {
-    "cognome": "BENSO",
-    "idAna": 123
-  },
-  "testi": [
-    {
-      "tipo": "Diario d'equipe",
-      "data": "02-01-2026 17:44",
-      "testo": "Testo relativo a Camillo..."
-    }
-  ]
-}
-```
-
----
-
-### Utilizzo {#utilizzo-split}
-
-Per richiamare la procedura utilizzare il comando in una delle sue versioni:
-
-```bash
-python split.py -o "cartella_output" "input1.json" "input2.json"
-```
-
-Linux/macOS:
-
-```bash
-python3 split.py -o "~/Desktop/output" "~/Desktop/diario1.json"
-```
-
----
-
-## merge.py
-
-Lo script `merge.py` serve per leggere una cartella contenente più file JSON relativi a singoli pazienti (struttura anagrafica \+ testi), e unificare automaticamente i file che si riferiscono allo stesso paziente, producendo un unico nuovo file JSON per ciascun paziente identificato tra i file forniti in input.
-
-### Formato di Input {#formato-di-input-merge}
-
-La cartella in input deve contenere dei file JSON con una sezione `anagrafica` (singolo dizionario) contenente almeno un dato tra cognome e idAna e deve contenere una sezione `testi` (lista di dizionari) contenente i testi non strutturati relativi al singolo paziente.
-
-Devono quindi rispettare il seguente formato:
-
-```json
-{
-  "anagrafica": {
-    "cognome": "BENSO",
-    "idAna": 123
-  },
-  "testi": [
-    {
-      "testo": "Testo relativo a Camillo..."
-    }
-  ]
-}
-```
-Nota: più file possono riferirsi allo stesso paziente anche se una anagrafica contiene meno informazioni dell’altra. Tuttavia, se nella cartella in input esistono due file attribuiti a pazienti aventi lo stesso cognome *A* ma idAna diversi e un file contenente unicamente l’informazione del cognome valorizzato ad *A*, quest’ultimo potrà essere unito indistintamente a uno qualsiasi dei due possibili pazienti.
-
----
-
-### Formato di Output {#formato-di-output-merge}
-
-I vari file JSON in output conterranno una sezione `anagrafica` (singolo dizionario) contenente l’unione dei vari dati anagrafici raccolti nei file in input, e una sezione `testi` (lista di dizionari) contenente tutti i testi raccolti relativi al paziente dai file in input.
-
-Ciascuno dei file prodotti rispetterà il formato:
-
-```json
-{
-  "anagrafica": {
-    "nome": "CAMILLO",
-    "cognome": "BENSO",
-    "idAna": 123
-  },
-  "testi": [
-    {
-      "testo": "Testo 1..."
-    },
-    {
-      "testo": "Testo 2..."
-    }
-  ]
-}
-```
-
----
-
-### Utilizzo {#utilizzo-merge}
-
-Per richiamare la procedura utilizzare il comando:
-
-```bash
-python merge.py "cartella_input_e_output"
-```
-
----
-
-### Logica di Fusione
-
-Due file vengono considerati riferiti allo stesso paziente quando:
-
-* Le anagrafiche sono esattamente uguali, oppure  
-* Una anagrafica contiene un sottoinsieme degli stessi campi con gli stessi valori.
-
-Al termine dell’esecuzione verrà prodotto un nuovo file JSON per ciascun paziente e i file originali verranno eliminati.
-
----
-
-## anonymize.py
-
-Vero e proprio comando per l’anonimizzazione. Comprende l’anonimizzazione completa dei testi utilizzando modello NER e regole aggiuntive di matching.
-
-### Formato di Input {#formato-di-input-anonymize}
-
-Ogni file in input può avere estensione **.txt**, **.docx**, **.pdf** o **.json**.  
-Nel caso in cui l’input sia un file JSON, esso può contenere una sezione `anagrafica` facoltativa e dovrebbe contenere una lista `testi` di stringhe da anonimizzare.  
-In tutti gli altri casi, l’intero contenuto del file verrà elaborato per l’anonimizzazione.
-
-Il formato atteso dei singoli file JSON è il seguente:
-
-Formato JSON:
-
-```json
-{
-  "anagrafica": {
-      "nome": "CAMILLO",
-      "cognome": "BENSO",
-      "ragSoc": "CAMILLO BENSO CONTE DI CAVOUR",
-      "nazione_nascita": "ITALIA",
-      "luogo_nascita": "TORINO",
-      "data_nascita": "10-07-1810",
-      "nazione_residenza": "ITALIA",
-      "luogo_residenza": "TORINO",
-      "prov_residenza": "TO",
-      "idAna": 123
-    },
-  "testi": [
-    {
-      "tipo": "Tipo di testo",
-      "data": "02-01-2026 17:44",
-      "testo": "Testo contenente dati personali..."
-    }
-  ]
-}
-```
-
-Note: 
-
-* Tutte le informazioni aggiuntive relative ai testi (`tipo`, `data`) verranno mantenute nei file di output.  
-* Le informazioni contenute in `anagrafica` saranno utilizzate per anonimizzazione aggiuntiva basata su match di stringhe.  
-* Includendo l’`idAna` in `anagrafica` , questo sarà utilizzato per nominare i file di output anonimizzati e verrà incluso come dato all’interno degli stessi (trattasi dell’unico dato anagrafico che rimane negli output).
-
----
-
-### Formato di Output {#formato-di-output-anonymize}
-
-Tutti i testi presenti nei file in input riferiti allo stesso paziente vengono salvati in un unico file JSON di nome:
-
-- `<idAna>.json`		  
-  se `idAna` è fornito nelle informazioni anagrafiche
-
-- `UKNOWN_xxxxxxxx.json`	  
-  se `idAna` non è fornito nelle informazioni anagrafiche ma sono comunque disponibili altre informazioni anagrafiche utili ad eseguire un raggruppamento, dove `xxxxxxxx` è una sequenza esadecimale casuale.
-
-- `text_x.json`			  
-  se nè `idAna` nè altre informazioni anagrafiche sono state fornite per un testo, dove `x` è un incrementale relativo al singolo testo presente nel file.
-
-Il formato effettivo dei file JSON in output è il seguente:
-
-```json
-{
-  "idAna": 123,
-  "testi": [
-    {
-      "tipo": "Tipo di testo",
-      "data": "02-01-2026 17:44",
-      "testo": "Testo anonimizzato..."
-    }
-  ]
-}
-```
-
-Nota: i testi possono essere salvati in tanti file diversi attraverso l’impostazione `DEFAULT_OUTPUTS_IN_SINGLE_FILE.`
-
----
-
-### Utilizzo {#utilizzo-anonymize}
-
-La forma generale del comando prevede:
-
-* `input` : una o più stringhe che rappresentano percorsi ai file o cartelle che contengono i file da anonimizzare.  
-* `opzioni` : lista di opzioni per anonimizzazione e salvataggio (vedere sotto).
-
-```bash
-python anonymize.py [input] [opzioni]
-```
-
-Esempio:
-
-```bash
-python anonymize.py "documenti_pazienti" "documento1.json" --output-dir "documenti_anonimizzati"
-```
-
-Linux/macOS:
-
-```bash
-python3 anonymize.py "/home/mario/Desktop/documenti_pazienti" "/home/mario/Desktop/documento1.json" --output-dir "/home/mario/Desktop/documenti_anonimizzati"
-```
-
-Opzioni:
-
-* `--output-dir`  
-  Usato per indicare il percorso della directory di output. Se non specificato e l’input fornito è unico, l’output viene salvato nella stessa cartella dell’input.
-
-* `--text`  
-  Usato in alternativa agli input per fornire direttamente il testo da anonimizzare.  
-  In questo caso, se non viene specificata una directory di output, il testo anonimizzato viene stampato a video.
-
-    Esempio:
-    ```bash
-    python anonimize.py --text "Mario Rossi nato a Milano il 01-01-1980"
-    ```
-  
-* `--entities`  
-  Usato per specificare le entità da anonimizzare. Se non specificato, vengono usate le entità di default (vedi sezione configurazione).
-
-    Esempio:
-    ```bash
-    `python anonimize.py "file.txt" --entities "PER" "LOC" "DATE"
+- Python ≥ 3.12 (3.13+ recommended)
+- Tkinter (usually included with Python)
+  - On Ubuntu/Debian systems, you may need to install it separately:
+  ```bash
+    sudo apt install python3-tk
     ```
 
-* `--per-matching`  
-  Indica il livello di matching aggiuntivo nel range `[0, 2]` per le entità di tipo `PER` tramite dizionari di nomi e cognomi. Se non specificato, vengono usate le entità di default. Vedi sezione configurazione per ulteriori dettagli sui livelli.
+## Installation
+1. Install Git LFS on your machine. This is needed to pull large trained models files.
+```bash
+git lfs install
+```
 
-    Esempio:
-    ```bash
-    python anonimize.py "file.txt" --per-matching 2
-    ```
+2. Clone this repository:
+```bash
+git clone https://github.com/marco-caputo/substance-abuse-italian-anonymizer.git
+```
 
-* `--personal-data`  
-  Permette di fornire il percorso ad un file JSON contenente dati personali specifici da anonimizzare tramite matching di stringhe, in sostituzione al dizionario anagrafica che può essere indicato nei file JSON.
+3. Navigate to the project directory:
+```bash
+cd substance-abuse-italian-anonymizer
+```
 
-    Esempio:
-    ```bash
-    python anonimize.py "file.txt" --personal-data "C:\Users\Mario\Desktop\dizionario.json"
-    ```
-
-* `--gui`  
-  Avvia l’interfaccia grafica dell’anonimizzatore. Nessun altro input o opzione viene considerata.
-
-    Esempio:
-    ```bash
-    python anonimize.py --gui
-    ```
-  
----
-
-## Configurazioni
-
-Il comportamento degli script è controllato tramite una serie di parametri definiti nel file di configurazione `config.py`.
-
-| Impostazioni Generali |  |
-| ----- | :---- |
-| `DEFAULT_NER_MODEL` | Specifica il percorso del modello spaCy utilizzato per il riconoscimento delle entità nominate (NER). |
-| `DEFAULT_ENTITIES` | Lista delle entità che vengono anonimizzate di default. Questa lista può essere sovrascritta tramite il parametro `--entities` da riga di comando.Le entità disponibili sono:`PATIENT`, `PER`, `LOC`, `ORG`, `FAC`, `GPE`, `PROV`, `DATE`, `EVENT`, `NORP`, `AGE`, `PRODUCT`, `WORKS_OF_ART`, `CODE`, `MAIL`, `PHONE`, `URL`. |
-| `DEFAULT_EXTRA_PER_MATCHING_LEVEL` | Controlla il livello di pattern matching aggiuntivo per le entità di tipo `PER` (oltre al riconoscimento NER): `0` → nessun matching aggiuntivo `1` → riconosce nomi e cognomi non ambigui (che non appaiono nel dizionario italiano) quando compaiono come nomi propri (maiuscoli o con iniziale maiuscola e non preceduti da una preposizione). `2` → riconosce nomi non ambigui in qualsiasi forma e nomi/cognomi ambigui quando compaiono come nomi propri. |
-| `DEFAULT_OUTPUTS_IN_SINGLE_FILE` | Determina il formato dei file di output:`True` → se nel JSON sono presenti più testi relativi allo stesso paziente, vengono salvati in un unico file JSON.`False` → ogni singolo testo viene sempre salvato in un file TXT separato. |
-| **Impostazioni per Multiprocessing** |  |
-| `MULTI_PROCESSING` | Abilita o disabilita l'elaborazione parallela del modello NER e delle regole. Se impostato a `True` più testi vengono anonimizzati contemporaneamente in base al parametro successivo. |
-| `P_CORES` | Numero di core utilizzati in modalità multiprocessing. E’ consigliabile impostare il valore al numero di Performance Core della macchina in utilizzo. |
-| **Impostazioni sul Formato dei JSON in Input** |  |
-| `PATIENT_DATA_FIELDS` | Definisce il nome dei campi principali del JSON. Di default:`anagrafica` → dizionario con i dati personali del paziente. `testi` → lista dei testi associati al paziente. |
-| `SINGLE_TEXT_FIELDS` | Definisce la struttura di ciascun testo, di default:`tipo` → tipologia del documento `data` → data del documento `testo` → testo originale `testo_anonimizzato` → testo anonimizzato (usato per testing) `lista_entita` → lista delle entità riconosciute (usato per testing) |
-| `PERSONAL_DATA_FIELDS` | Definisce i campi dell’anagrafica del paziente. |
-| `PERSONAL_DATA_FORMAT` | Mappa ogni campo anagrafico all’etichetta NER corrispondente. |
-| `SINGLE_ENTITY_FIELDS` | Definisce la struttura di una singola entità riconosciuta nel testo (usato per testing). |
+4. Install the required packages:
+```bash
+pip install -r requirements.txt
+```
 
 ---
 
-## Lista delle Entità Riconosciute
+## GUI Mode
 
-L’elenco completo delle entità disponibili nell’ultima versione del modello di anonimizzazione è descritto nella seguente tabella:
+To launch the graphical interface:
 
-| Tipo di Entità | Descrizione | Esempi |
-|----------------|------------|--------|
-| PATIENT | Nomi del paziente | 'Giovanni Verdi', 'Luca' |
-| PER | Nomi di persona | 'Rossi', 'Mario Bianchi', 'G. Verdi' |
-| LOC | Luoghi generici | 'Parco del Gran Sasso', 'via Roma' |
-| ORG | Organizzazioni | 'SerT di Milano', 'ASL', 'Comunità Terapeutica La Quercia' |
-| FAC | Strutture e infrastrutture | 'Ospedale San Raffaele', 'Ponte di Rialto', 'Aeroporto di Fiumicino' |
-| GPE | Entità geopolitiche (Stati, regioni, città) | 'Germania', 'Marche', 'Milano' |
-| NORP | Nazionalità, gruppi religiosi o politici | 'tedesco', 'cattolico', 'comunista' |
-| AGE | Età della persona | '35 anni', '42enne' |
-| DATE | Date o riferimenti temporali | '5 maggio', '2020', '20/03/2021' |
-| EVENT | Eventi | 'Sagra della Porchetta', 'Natale' |
-| WORKS_OF_ART | Titoli di opere | 'La Divina Commedia', 'Breaking Bad' |
-| PRODUCT | Prodotti | 'iPhone', 'Fiat Panda', 'Pavesini' |
-| CODE | Codici (fiscali, postali, ecc.) | 'RSSMRA85M01H501U', '20123' |
-| MAIL | Indirizzi email | 'mario.rossi89@topmail.it' |
-| PHONE | Numeri di telefono | '+39 333 1234567', '02 12345678' |
-| PROV | Province italiane | 'MI', 'RM', 'TO' |
-| URL | Siti web / URL | 'www.example.com', 'https://example.org' |
+```bash
+python anonymize.py --gui
+```
+
+## Command Line Usage
+
+### Basic anonymization
+
+```bash
+python anonymize.py --text "Mario Rossi vive a Roma."
+```
+
+### Anonymize from file
+
+```bash
+python anonymize.py --input-file input.txt
+```
+
+### Save output to a specific file
+
+```bash
+python anonymize.py --input-file input.txt --output-file anonymized.txt
+```
+
+### Choose which entity types to anonymize
+
+```bash
+python anonymize.py --text "Mario vive a Roma." --entities "PATIENT" "GPE"
+```
+
+### Read from stdin
+
+```bash
+echo "Mario vive a Roma." | python anonymize.py
+```
+
+The full list of command line options is:
+
+| Option | Description                                                                                                                               |
+|-------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| `--text` | Text to anonymize, provided directly via the command line.                                                                                |
+| `--input-file` | Path to a file containing text to anonymize. If the file is JSON, it may also include a dictionary of personal data.                      |
+| `--output-path` | Path to save the anonymized output. If omitted, the result is printed to the input folder if a file was provided or the stdout otherwise. |
+| `--entities` | List of entity types to anonymize (e.g. `PER`, `LOC`, `ORG`, `MAIL`, `PHONE`).                                                            |
+| `--per-matching` | Enable extra matching for `PER` and `PATIENT` entities using available dictionaries.                                                      |
+| `--personal-data` | Path to a JSON dictionary of specific personal data to anonymize, following the expected personal data format described in config.py.     |
+| `--gui` | Launch the graphical user interface.                                                                                                      |
+
+
+## Configuration
+
+In the config.py file, you can customize default settings about:
+- Which entity types to anonymize
+- The spaCy model to use
+
+The full list of availble entity types in the latest anonymization model is described in the following table:
+
+| Entity Type | Description               | Examples                                                             |
+|-------------|---------------------------|----------------------------------------------------------------------|
+| PATIENT     | Patient names             | 'Giovanni Verdi', 'Luca'                                             |
+| PER         | Person names              | 'Rossi', 'Mario Bianchi', 'G. Verdi'                                 |
+| LOC         | Locations                 | 'Parco del Gran Sasso', 'via Roma'                                   |
+| ORG         | Organizations             | 'SerT di Milano', 'ASL', 'Comunità Terapeutica La Quercia'           |
+| FAC         | Facilities                | 'Ospedale San Raffaele', 'Ponte di Rialto', 'Aeroporto di Fiumicino' |
+| GPE         | Geopolitical entities     | 'Germania', 'Marche', 'Milano'                                       |
+| NORP        | Nationalities/Religious/Political groups | 'tedesco', 'cattolico', 'comunista'                                  |
+| AGE         | Person age                | '35 anni', '42enne'                                                  |
+| DATE        | Dates/Time references     | '5 maggio', '2020', '20/03/2021'                                     |
+| EVENT       | Events                    | 'Sagra della Porchetta', 'Natale'                                    |
+| WORKS_OF_ART| Titles of works           | 'La Divina Commedia', 'Breaking Bad'                                 |
+| PRODUCT     | Products                  | 'iPhone', 'Fiat Panda', 'Pavesini'                                   |
+| CODE        | Codes (fiscal, postal, etc.)| 'RSSMRA85M01H501U', '20123'                                          |
+| MAIL        | Email addresses           | 'mario.rossi89@topmail.it'                                           |
+| PHONE       | Phone numbers             | '+39 333 1234567', '02 12345678'                                     |
+| PROV        | Italian provinces         | 'MI', 'RM', 'TO'                                                     |
+| URL         | Websites/URLs             | 'www.example.com', 'https://example.org'                             |
+
+---
+
+## Model Performance
+
+Here is reported the performance of the anonymization and NER models evaluated on the latest test dataset.
+
+### **Deployed Model v3.0**
+
+This model (`deployed_v3`) is trained on both pre-trained transformer and NER state-transition model from `it_nerIta_trf` (https://huggingface.co/bullmount/it_nerIta_trf). Dataset used for fine-tuning includes reports and personal, therapeutic, psychiatric and educational diaries. Both lower and upper-case manipulations were applied to the training data to improve robustness.
+
+#### **Full Anonymization (NER + Rules)**
+
+| Label        | Precision | Recall | Coverage | F1    |
+|--------------|------------|--------|-----------|--------|
+| AGE          | 0.907      | 0.960  | 0.970     | 0.933 |
+| CODE         | 0.875      | 0.875  | 0.875     | 0.875 |
+| DATE         | 0.909      | 0.972  | 0.982     | 0.939 |
+| EVENT        | 0.831      | 0.794  | 0.824     | 0.812 |
+| FAC          | 0.605      | 0.697  | 0.736     | 0.648 |
+| GPE          | 0.839      | 0.928  | 0.934     | 0.881 |
+| LOC          | 0.839      | 0.777  | 0.836     | 0.807 |
+| MAIL         | 0.714      | 1.000  | 1.000     | 0.833 |
+| NORP         | 0.556      | 0.625  | 0.625     | 0.588 |
+| ORG          | 0.719      | 0.708  | 0.761     | 0.714 |
+| PER          | 0.896      | 0.974  | 0.980     | 0.933 |
+| PHONE        | 0.889      | 1.000  | 1.000     | 0.941 |
+| PRODUCT      | 0.795      | 0.857  | 0.857     | 0.825 |
+| PROV         | 0.786      | 0.880  | 0.880     | 0.830 |
+| URL          | 0.667      | 0.667  | 0.667     | 0.667 |
+| WORKS_OF_ART | 0.887      | 0.872  | 0.880     | 0.879 |
+| ENT          | 0.867      | 0.924  | 0.948     | 0.895 |
+| **macro**    | **0.795**  | **0.849** | **0.863** | **0.819** |
+| **weighted** | **0.849**  | **0.907** | **0.923** | **0.877** |
+| **micro**    | **0.850**  | **0.907** | **0.923** | **0.878** |
+
+
+### **Deployed Model v2.2**
+
+This model (`deployed_v2.2`) is trained on both pre-trained transformer and NER state-transition model from `it_nerIta_trf` (https://huggingface.co/bullmount/it_nerIta_trf). Dataset used for fine-tuning includes reports and personal, therapeutic, psychiatric and educational diaries. Both lower and upper-case manipulations were applied to the training data to improve robustness.
+
+#### **Full Anonymization (NER + Rules)**
+
+| Label        | Precision | Recall | F1    |
+|--------------|------------|--------|-------|
+| PATIENT      | 0.950      | 0.977  | 0.963 |
+| PER          | 0.827      | 0.982  | 0.897 |
+| ORG          | 0.757      | 0.760  | 0.758 |
+| GPE          | 0.877      | 0.898  | 0.887 |
+| LOC          | 0.774      | 0.730  | 0.751 |
+| FAC          | 0.654      | 0.674  | 0.664 |
+| NORP         | 0.500      | 0.750  | 0.600 |
+| AGE          | 0.970      | 0.980  | 0.975 |
+| DATE         | 0.951      | 0.988  | 0.969 |
+| EVENT        | 0.712      | 0.691  | 0.701 |
+| WORKS_OF_ART | 0.908      | 0.846  | 0.876 |
+| PRODUCT      | 0.853      | 0.831  | 0.842 |
+| CODE         | 0.900      | 0.818  | 0.857 |
+| MAIL         | 0.833      | 1.000  | 0.909 |
+| PHONE        | 1.000      | 1.000  | 1.000 |
+| PROV         | 0.791      | 0.739  | 0.764 |
+| URL          | 0.667      | 0.667  | 0.667 |
+| **micro**    | **0.869**  | **0.908** | **0.888** |
+
+
+#### **Full Anonymization with no dictionary-based anonymization for PER**
+
+| Label        | Precision | Recall | F1    |
+|--------------|------------|--------|-------|
+| PATIENT      | 0.953      | 0.982  | 0.967 |
+| PER          | 0.934      | 0.982  | 0.958 |
+| ORG          | 0.757      | 0.760  | 0.758 |
+| GPE          | 0.869      | 0.902  | 0.885 |
+| LOC          | 0.774      | 0.730  | 0.751 |
+| FAC          | 0.667      | 0.687  | 0.677 |
+| NORP         | 0.500      | 0.750  | 0.600 |
+| AGE          | 0.970      | 0.980  | 0.975 |
+| DATE         | 0.951      | 0.988  | 0.969 |
+| EVENT        | 0.818      | 0.794  | 0.806 |
+| WORKS_OF_ART | 0.908      | 0.846  | 0.876 |
+| PRODUCT      | 0.853      | 0.831  | 0.842 |
+| CODE         | 0.900      | 0.818  | 0.857 |
+| MAIL         | 0.833      | 1.000  | 0.909 |
+| PHONE        | 1.000      | 1.000  | 1.000 |
+| PROV         | 0.804      | 0.804  | 0.804 |
+| URL          | 0.667      | 0.667  | 0.667 |
+| **micro**    | **0.889**  | **0.912** | **0.900** |
+
+
+#### **NER**
+
+| Label        | Precision | Recall | F1    |
+|--------------|------------|--------|-------|
+| PATIENT      | 0.953      | 0.982  | 0.967 |
+| PER          | 0.934      | 0.982  | 0.958 |
+| ORG          | 0.757      | 0.760  | 0.758 |
+| GPE          | 0.876      | 0.896  | 0.886 |
+| LOC          | 0.771      | 0.730  | 0.750 |
+| FAC          | 0.662      | 0.683  | 0.672 |
+| NORP         | 0.500      | 0.750  | 0.600 |
+| AGE          | 0.970      | 0.980  | 0.975 |
+| DATE         | 0.949      | 0.988  | 0.968 |
+| EVENT        | 0.818      | 0.794  | 0.806 |
+| WORKS_OF_ART | 0.908      | 0.846  | 0.876 |
+| PRODUCT      | 0.853      | 0.831  | 0.842 |
+| **micro**    | **0.891**  | **0.897** | **0.894** |
+
+
+### **Deployed Model v2**
+
+This model (`deployed_v2`) is trained on both pre-trained transformer and NER state-transition model from `it_nerIta_trf` (https://huggingface.co/bullmount/it_nerIta_trf). Dataset used for fine-tuning includes reports and personal, therapeutic and psychiatric diaries. Just lower-case manipulations were applied to the training data to improve robustness.
+
+#### **Full Anonymization (NER + Rules)**
+
+| Label | Precision | Recall | F1 |
+|-------|-----------|--------|--------|
+| PATIENT | 0.908 | 0.958 | 0.932 |
+| PER | 0.736 | 0.967 | 0.836 |
+| ORG | 0.742 | 0.746 | 0.744 |
+| GPE | 0.826 | 0.869 | 0.847 |
+| LOC | 0.773 | 0.727 | 0.750 |
+| FAC | 0.609 | 0.571 | 0.589 |
+| NORP | 0.714 | 0.500 | 0.588 |
+| AGE | 0.800 | 0.774 | 0.787 |
+| DATE | 0.846 | 0.911 | 0.877 |
+| EVENT | 0.744 | 0.674 | 0.707 |
+| WORKS_OF_ART | 0.744 | 0.836 | 0.787 |
+| PRODUCT | 0.702 | 0.755 | 0.727 |
+| CODE | 1.000 | 0.700 | 0.824 |
+| PHONE | 0.235 | 1.000 | 0.381 |
+| PROV | 0.773 | 0.756 | 0.764 |
+| **micro** | **0.801** | **0.868** | **0.833** |
+
+#### **NER**
+
+| Label | Precision | Recall | F1 |
+|-------|-----------|--------|--------|
+| PATIENT | 0.895 | 0.963 | 0.928 |
+| PER | 0.924 | 0.953 | 0.939 |
+| ORG | 0.731 | 0.736 | 0.733 |
+| GPE | 0.820 | 0.877 | 0.847 |
+| LOC | 0.770 | 0.727 | 0.748 |
+| FAC | 0.622 | 0.587 | 0.604 |
+| NORP | 0.714 | 0.500 | 0.588 |
+| AGE | 0.800 | 0.774 | 0.787 |
+| DATE | 0.848 | 0.927 | 0.886 |
+| EVENT | 0.795 | 0.721 | 0.756 |
+| WORKS_OF_ART | 0.714 | 0.822 | 0.764 |
+| PRODUCT | 0.702 | 0.755 | 0.727 |
+| **micro** | **0.835** | **0.855** | **0.845** |
+
+---
+
+### **Deployed Model v1**  
+The previous model (`deployed_v1`), trained on pre-trained transformer from `bert-base-italian-xxl-cased` (https://huggingface.co/dbmdz/bert-base-italian-xxl-cased) and a newly initialized state-transition NER module.
+
+### **Full Anonymization (NER + Rules)**
+
+| Label | Precision | Recall | F1 |
+|-------|-----------|--------|--------|
+| PATIENT | 0.848 | 0.953 | 0.898 |
+| PER | 0.751 | 0.896 | 0.817 |
+| ORG | 0.243 | 0.365 | 0.292 |
+| GPE | 0.791 | 0.611 | 0.689 |
+| LOC | 0.594 | 0.706 | 0.645 |
+| AGE | 0.541 | 0.532 | 0.537 |
+| DATE | 0.818 | 0.934 | 0.873 |
+| CODE | 0.875 | 0.700 | 0.778 |
+| PHONE | 0.308 | 1.000 | 0.471 |
+| PROV | 0.773 | 0.756 | 0.764 |
+| **micro** | **0.672** | **0.705** | **0.689** |
+
+### **NER**
+
+| Label | Precision | Recall | F1 |
+|-------|-----------|--------|--------|
+| PATIENT | 0.842 | 0.952 | 0.894 |
+| PER | 0.880 | 0.874 | 0.877 |
+| ORG | 0.234 | 0.353 | 0.281 |
+| GPE | 0.745 | 0.604 | 0.667 |
+| LOC | 0.594 | 0.706 | 0.645 |
+| AGE | 0.541 | 0.532 | 0.537 |
+| DATE | 0.599 | 0.880 | 0.713 |
+| **micro** | **0.647** | **0.677** | **0.661** |
+
+### **Presidio Baseline**  
+A simple baseline anonymizer using the **spaCy `it_core_news_lg` model** (https://spacy.io/models/it/).
+Presidio supports only a subset of entity types and serves primarily as a basic comparison point.
+
+### **Full Anonymization**
+
+| Label | Precision | Recall | F1 |
+|-------|-----------|--------|-----|
+| PER   | 0.281 | 0.709 | 0.402 |
+| LOC   | 0.037 | 0.358 | 0.066 |
+| MAIL  | 0.500 | 0.600 | 0.545 |
+| PHONE | 0.006 | 0.125 | 0.012 |
+| micro | 0.158 | 0.131 | 0.143 |
+
+
+

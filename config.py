@@ -1,6 +1,6 @@
 ### IMPOSTAZIONI GENERALI
 
-DEFAULT_NER_MODEL = "NER/models/deployed/deployed_v2.2"
+DEFAULT_NER_MODEL = "NER/models/deployed/deployed_v3"
 DEFAULT_ENTITIES = ["PATIENT", "PER", "LOC", "ORG", "FAC", "GPE", "PROV", "DATE", "EVENT", "NORP", "AGE", "CODE", "MAIL", "PHONE", "URL"]
 DEFAULT_EXTRA_PER_MATCHING_LEVEL = 0            # Whether to use extra pattern matching for PERSON entities (in addition to NER), in particular:
                                                 # 0: no extra matching,
@@ -13,6 +13,10 @@ DEFAULT_OUTPUTS_IN_SINGLE_FILE = True           # True: If multiple texts are fo
 MULTI_PROCESSING = False                        # Whether to use multiprocessing for anonymizing multiple texts
 P_CORES = 4                                     # Number of Cores / Performance Cores of the machine (used for multiprocessing)
 
+### IMPOSTAZIONI CLOUD
+
+PDF_BUCKET_NAME = "documenti-pdf"               # Nome del bucket S3 dove sono salvati i file pdf
+
 ### FORMATO DEI JSON DI INPUT
 
 PATIENT_DATA_FIELDS = [
@@ -24,7 +28,8 @@ SINGLE_TEXT_FIELDS = [
     "data",                     # Stringa che indica la data del testo (es. "2023-01-15")
     "testo",                    # Stringa con il testo originale
     "testo_anonimizzato",       # Stringa con il testo anonimizzato (opzionale, usato per scopi di testing, alternativo a "lista_entita")
-    "lista_entita"              # Lista di dizionari con le entità presenti nel testo, i singoli dizionari seguono la struttura di SINGLE_ENTITY_FIELDS (opzionale, usato per scopi di testing, alternativo a "testo_anonimizzato")
+    "lista_entita",             # Lista di dizionari con le entità presenti nel testo, i singoli dizionari seguono la struttura di SINGLE_ENTITY_FIELDS (opzionale, usato per scopi di testing, alternativo a "testo_anonimizzato")
+    "key_s3"                    # Stringa con il link al file pdf originale salvato su S3 (usato al posto del campo testo)
 ]
 PERSONAL_DATA_FIELDS = [
     "nome",

@@ -4,12 +4,12 @@ from typing import Iterable
 
 from spacy.tokens import Doc
 from docx import Document
-from PyPDF2 import PdfReader
 
 from config import PATIENT_DATA_FIELDS, SINGLE_TEXT_FIELDS, DEFAULT_OUTPUTS_IN_SINGLE_FILE, SINGLE_ENTITY_FIELDS, \
     PERSONAL_DATA_FIELDS
 from utils.json_utils import read_json_file, save_json_file
 from utils.path_utils import get_file_name_from_anagrafica
+from utils.pdf_utils import extract_structured_text, read_pdf_from_s3
 
 TEXT = SINGLE_ENTITY_FIELDS[0]
 START = SINGLE_ENTITY_FIELDS[1]
@@ -116,12 +116,12 @@ def save_many_texts(texts: list[str],
 
     # Multiple texts → single JSON
     if metadata:
-        unlabelled_metadata = [{field: meta[field] for field in SINGLE_TEXT_FIELDS[:-3]} for meta in metadata]
+        unlabelled_metadata = [({field: meta[field] for field in SINGLE_TEXT_FIELDS[:2]} if meta else {}) for meta in metadata]
         text_data = [{**meta, **{SINGLE_TEXT_FIELDS[2]: text}} for text, meta in zip(texts, unlabelled_metadata)]
     else:
         text_data = list(texts)
 
-    if personal_data:
+    if personal_data and any(data is not None for data in personal_data):
         out_paths = []
         for base_name in set(base_names):
             indeces = [i for i in range(len(personal_data))
@@ -129,7 +129,7 @@ def save_many_texts(texts: list[str],
                            if personal_data[i] else f"text_{i+1}") == base_name]
             patient_data = {
                     PERSONAL_DATA_FIELDS[8]: base_name if isinstance(base_name, int) else None,
-                    PERSONAL_DATA_FIELDS[1]: [text_data[i] for i in indeces]
+                    PATIENT_DATA_FIELDS[1]: [text_data[i] for i in indeces]
             }
 
             base_file_name = os.path.splitext(os.path.basename(original_filename))[0] \
@@ -146,7 +146,11 @@ def save_many_texts(texts: list[str],
             if original_filename is not None else base_names[0]
 
         out_path = os.path.join(output_dir, f"{base_file_name}_anonymized.json")
-        save_json_file(out_path, text_data)
+        patient_data = {
+            PERSONAL_DATA_FIELDS[8]: None,
+            PATIENT_DATA_FIELDS[1]: text_data
+        }
+        save_json_file(out_path, patient_data)
         return output_dir
 
 
@@ -164,17 +168,21 @@ def read_file(file_path) -> tuple[list[str], list[dict[str,str]]|None, dict[str,
         doc = Document(file_path)
         texts = ["\n".join([para.text for para in doc.paragraphs])]
     elif ext == ".pdf":
-        reader = PdfReader(file_path)
-        texts = ["\n".join([page.extract_text() or "" for page in reader.pages])]
+        texts = [extract_structured_text(file_path)]
     elif ext == ".json":
         data = read_json_file(file_path)
-        try:
-            texts = [text[SINGLE_TEXT_FIELDS[2]] for text in data[PATIENT_DATA_FIELDS[1]]]
-        except IndexError:
-            raise ValueError(f"JSON file must contain a '{PATIENT_DATA_FIELDS[1]}' field consisting in a list of entries with '{SINGLE_TEXT_FIELDS[1]}' fields.")
+        texts = []
+        for text in data[PATIENT_DATA_FIELDS[1]]:
+            if SINGLE_TEXT_FIELDS[2] in text:
+                texts.append(text[SINGLE_TEXT_FIELDS[2]])
+            elif SINGLE_TEXT_FIELDS[5] in text:
+                texts.append(extract_structured_text(read_pdf_from_s3(text[SINGLE_TEXT_FIELDS[5]])))
+            else:
+                raise ValueError(f"Each entry in the '{PATIENT_DATA_FIELDS[1]}' list must contain either a '{SINGLE_TEXT_FIELDS[2]}' field with the text content or a '{SINGLE_TEXT_FIELDS[5]}' field with the path to a PDF file containing the text.")
 
         for text in data[PATIENT_DATA_FIELDS[1]]:
-            meta = {field: text.get(field, None) for field in SINGLE_TEXT_FIELDS if field != SINGLE_TEXT_FIELDS[2]}
+            meta = {field: text.get(field, None) for field in SINGLE_TEXT_FIELDS
+                    if field not in {SINGLE_TEXT_FIELDS[2], SINGLE_TEXT_FIELDS[5]}}
             metadata.append(meta)
 
         if PATIENT_DATA_FIELDS[0] in data: personal_data = data[PATIENT_DATA_FIELDS[0]]
@@ -182,3 +190,11 @@ def read_file(file_path) -> tuple[list[str], list[dict[str,str]]|None, dict[str,
         raise ValueError("Unsupported file type.")
 
     return texts, metadata, personal_data
+
+def replace_patient_labels(data):
+    """Replaces 'PATIENT' labels with 'PER'"""
+    for item in data:
+        for entity in item.get("entities", []):
+            if entity["label"] == "PATIENT":
+                entity["label"] = "PER"
+    return data
